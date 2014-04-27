@@ -1,0 +1,12 @@
+{
+  "name"   : "monstercat-bot",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "start": "node app.js"
+  },
+  "dependencies": {
+    "request": "*",
+    "cheerio": "*"
+  }
+}
