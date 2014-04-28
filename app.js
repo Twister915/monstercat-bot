@@ -426,7 +426,7 @@ function updatePost() {
 					+ "api_type=json"
 					+ "&kind=self"
 					+ "&sendreplies=false"
-					+ "&sr=3vans_sandbox"
+					+ "&sr=Monstercat"
 					+ "&title=" + encodeURIComponent(post.title)
 					+ "&text=" + encodeURIComponent(compiledPost),
 				headers: {
