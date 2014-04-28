@@ -1,10 +1,34 @@
 /* Import modules */
+var fs = require('fs');
 var request = require('request');
 var cheerio = require('cheerio');
 var settings = require('./settings.js');
 
+/* Import Data */
+var latest;
+fs.readFile(__dirname + '/data.json', 'utf8', function(err, data) {
+	if (err) {
+
+		throw err;
+	}
+
+	latest = JSON.parse(data);
+});
+
+function writeData(data) {
+
+	fs.writeFile(__dirname + '/data.json', JSON.stringify(data, null, 4), function(err) {
+
+		if (err) {
+
+			throw err;
+		}
+	});
+}
+
+/* Declare globals */
 var postedToday = false;
-var beatportURL = "http://www.beatport.com/label/monstercat/23412";
+var beatportURL = "http://www.beatport.com/label/monstercat/23412";	// These are the links we're going to crawl/request
 var soundcloudURL = "https://api.soundcloud.com/users/8553751/tracks.json?client_id=" + settings.scApiKey;
 var youtubeURL = "https://www.googleapis.com/youtube/v3/playlistItems?playlistId=UUJ6td3C9QlPO9O_J5dF4ZzA&key=" + settings.ytApiKey + "&part=snippet&maxResults=1";
 var bpData, bcData, scData, ytData, modhash, cookie, currentThread, postSubmittable, postSubmitted = false;
@@ -29,11 +53,12 @@ var userAgent = 'monstercat-bot/0.1.0 by 3vans'	// Maybe change this to your bot
 
 function update() {
 
+
 	var date = new Date();
 
 	if (date.getUTCDay == 1 || date.getUTCDay == 3 || date.getUTCDay == 5) {	// Is it a day in which we should be posting on?
 
-		if (date.getHours() == 0 && date.getMinutes() < 5 && postedToday === false) {	// Is it time to post?
+		if (date.getHours() == 0 && postedToday === false) {	// Is it time to post?
 
 			bpData, bcData, scData, ytData, modhash, cookie, postSubmitted, currentThread = false;	// Clear variables
 			post = {	// Clear the post variables
@@ -76,7 +101,7 @@ function updateSources() {
 		request(soundcloudURL, soundcloud);
 	}
 
-	if (!post.links.youtube || !post.links.spotify || !post.links.bandcamp) {
+	if (!post.links.youtube || !post.links.bandcamp) {
 
 		request(youtubeURL, youtube);
 	}
@@ -135,9 +160,16 @@ function beatport(err, res, body) {
 
 			// Get album artwork link
 			bpData.artwork = data.children().first().children().first().children().first().children().first().attr('data-full-image-url');
+			
+			if (bpData.link != latest.beatport) {
 
-			console.log("BTPRT: RECIEVED RESPONSE");
-			addToPost(bpData);
+				addToPost(bpData);
+
+				latest.beatport = bpData.link;
+				writeData(latest);
+
+				console.log("BTPRT: RECIEVED RESPONSE");
+			}
 		});
 	} else if (err) {
 
@@ -162,8 +194,15 @@ function bandcamp(err, res, body) {	// Note: There is no mechanism to pull bandc
 
 		bcData.artwork = $('#tralbumArt').children().first().attr('href');
 
-		console.log("BNCMP: RECIEVED RESPONSE");
-		addToPost(bcData);
+		if (bcData.artwork != latest.bandcamp) {
+
+			addToPost(bcData);
+
+			latest.bandcamp = bcData.artwork;
+			writeData(latest);
+
+			console.log("BNCMP: RECIEVED RESPONSE");
+		}
 
 	} else if (err) {
 
@@ -190,8 +229,15 @@ function soundcloud(err, res, body) {
 			artwork: track.artwork_url
 		}
 
-		console.log("SNCLD: RECIEVED RESPONSE");
-		addToPost(scData);
+		if (scData.link != latest.soundcloud) {
+
+			addToPost(scData);
+
+			latest.soundcloud = scData.link;
+			writeData(latest);
+
+			console.log("SNCLD: RECIEVED RESPONSE");
+		}
 	} else if (err) {
 
 		throw err;
@@ -219,8 +265,15 @@ function youtube(err, res, body) {
 			spLink: track.description.split("\n")[5].slice(19)
 		}
 
-		console.log("YOUTB: RECIEVED RESPONSE");
-		addToPost(ytData);
+		if (ytData.link != latest.youtube) {
+
+			addToPost(ytData);
+
+			latest.youtube = ytData.link;
+			writeData(latest);
+
+			console.log("YOUTB: RECIEVED RESPONSE");
+		}
 	} else if (err) {
 
 		throw err;
@@ -281,6 +334,7 @@ function addToPost(data) {
 		post.links.itunes = data.itLink;
 
 		if (data.spLink != "Coming Soon") {
+
 			post.links.spotify = data.spLink;
 		}
 	}
@@ -357,7 +411,11 @@ function updatePost() {
 
 			compiledPost += "[Download the album art](" + post.links.artwork + ")\n\n";
 		}
-		compiledPost += "___\n\nAll discussion about this release goes below. Please post hype about the next release in the Next Release thread.\n\n*This is an automated post by a bot. If I did something wrong please message me.*";
+		compiledPost += "___"
+		+ "\n\n"
+		+ "All discussion about this release goes below. Please post hype about the next release in the Next Release thread. I do not recieve karma for this post."
+		+ "\n\n"
+		+ "*This is an automated post by a bot. If I did something wrong please message me.*";
 
 		var options;
 		if (!postSubmitted) {
@@ -404,11 +462,46 @@ function updatePost() {
 				if (!JSON.parse(body).json.data) {
 
 					console.log(body);
-				} else if (postSubmitted) {
+				} else if (!postSubmitted) {
 
-					currentThread = JSON.parse(body).json.data.id;
+					currentThread = JSON.parse(body).json.data.name;
 					postSubmitted = true;
+					postedToday = true;
 					console.log('ENGIN: Post completed successfully at', currentThread);
+
+					options = {
+
+						url: "http://www.reddit.com/api/distinguish?"
+							+ "api_type=json"
+							+ "&how=yes"
+							+ "&id=" + currentThread,
+						headers: {
+
+							"User-Agent": userAgent,
+							"X-Modhash": modhash,
+							"Cookie": cookie
+						},
+						method: "POST"
+					};
+
+					request(options, distinguishThread);
+
+					options = {
+
+						url: "http://www.reddit.com/api/set_subreddit_sticky?"
+							+ "api_type=json"
+							+ "&id=" + currentThread
+							+ "&state=true",
+						headers: {
+
+							"User-Agent": userAgent,
+							"X-Modhash": modhash,
+							"Cookie": cookie
+						},
+						method: "POST"
+					};
+
+					request(options, stickyThread);
 				} else {
 
 					console.log('ENGIN: Edit completed successfully');
@@ -424,4 +517,33 @@ function updatePost() {
 	}
 }
 
+function distinguishThread(err, res, body) {
+
+	if (!err && res.statusCode == 200) {
+
+		console.log('RDDIT: Distinguished thread successfully');
+	} else if (err) {
+
+		throw err;
+	} else {
+
+		console.log('RDDIT: ' + res.statusCode + ' - ' + res.body);
+	}
+}
+
+function stickyThread(err, res, body) {
+
+	if (!err && res.statusCode == 200) {
+
+		console.log('RDDIT: Stickied thread successfully');
+	} else if (err) {
+
+		throw err;
+	} else {
+
+		console.log('RDDIT: ' + res.statusCode + ' - ' + res.body);
+	}
+}
+
+update();
 setInterval(update, 10000);
