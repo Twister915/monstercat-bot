@@ -546,4 +546,4 @@ function stickyThread(err, res, body) {
 }
 
 update();
-setInterval(update, 10000);
+setInterval(update, 300000);
