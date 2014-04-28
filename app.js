@@ -1,13 +1,31 @@
 /* Import modules */
 var request = require('request');
 var cheerio = require('cheerio');
-var settings = require('./settings');
+var settings = require('./settings.js');
 
 var postedToday = false;
 var beatportURL = "http://www.beatport.com/label/monstercat/23412";
 var soundcloudURL = "https://api.soundcloud.com/users/8553751/tracks.json?client_id=" + settings.scApiKey;
 var youtubeURL = "https://www.googleapis.com/youtube/v3/playlistItems?playlistId=UUJ6td3C9QlPO9O_J5dF4ZzA&key=" + settings.ytApiKey + "&part=snippet&maxResults=1";
-var bpData, bcData, scData, ytData, post;
+var bpData, bcData, scData, ytData, modhash, cookie, currentThread, postSubmittable, postSubmitted = false;
+var post = {	// Build post data
+
+	title: "",
+	trackTitle: "",
+	artist: "",
+	links: {
+
+		youtube: "",
+		beatport: "",
+		soundcloud: "",
+		bandcamp: "",
+		itunes: "",
+		spotify: "",
+		artwork: "",
+		artworkSource: ""
+	}
+}
+var userAgent = 'monstercat-bot/0.1.0 by 3vans'	// Maybe change this to your bot's name if you reuse code
 
 function update() {
 
@@ -17,36 +35,53 @@ function update() {
 
 		if (date.getHours() == 0 && date.getMinutes() < 5 && postedToday === false) {	// Is it time to post?
 
-			compilePost();
+			bpData, bcData, scData, ytData, modhash, cookie, postSubmitted, currentThread = false;	// Clear variables
+			post = {	// Clear the post variables
+
+				title: "",
+				trackTitle: "",
+				artist: "",
+				links: {
+
+					youtube: "",
+					beatport: "",
+					soundcloud: "",
+					bandcamp: "",
+					itunes: "",
+					spotify: "",
+					artwork: "",
+					artworkSource: ""
+				}
+			}
 		}
 	}
+
+	updateSources();
 }
 
-initiatePost();
+function updateSources() {
 
-function initiatePost() {
+	if (!cookie || !modhash) {
 
-	post = {	// Clear the post variables
-
-		title: "",
-		trackTitle: "",
-		artist: "",
-		links: {
-
-			youtube: "",
-			beatport: "",
-			soundcloud: "",
-			bandcamp: "",
-			itunes: "",
-			spotify: "",
-			artwork: ""
-		}
+		redditLogin();
 	}
-	request(beatportURL, beatport);
-	request(soundcloudURL, soundcloud);
-	request(youtubeURL, youtube);
-	
-	if (post.links.bandcamp) {
+
+	if (!post.links.beatport) {
+
+		request(beatportURL, beatport);
+	}
+
+	if (!post.links.soundcloud) {
+
+		request(soundcloudURL, soundcloud);
+	}
+
+	if (!post.links.youtube || !post.links.spotify || !post.links.bandcamp) {
+
+		request(youtubeURL, youtube);
+	}
+
+	if (post.links.artworkSource != 'bandcamp' && post.links.bandcamp) {
 
 		request(post.links.bandcamp, bandcamp);
 	}
@@ -184,6 +219,7 @@ function youtube(err, res, body) {
 			spLink: track.description.split("\n")[5].slice(19)
 		}
 
+		console.log("YOUTB: RECIEVED RESPONSE");
 		addToPost(ytData);
 	} else if (err) {
 
@@ -212,10 +248,21 @@ function addToPost(data) {
 	if (!post.links.artwork && data.artwork) {
 
 		post.links.artwork = data.artwork;
-	} else if (post.links.artwork && data.artwork && data.type != 'beatport') {
+		post.links.artworkSource = data.type;
+	} else if (post.links.artwork && data.artwork) {
 
-		post.links.artwork = data.artwork;
-	}
+		if (data.type == 'bandcamp') {
+
+			post.links.artwork = data.artwork;
+			post.links.artworkSource = data.type;
+		}
+
+		if (data.type != 'soundcloud' && post.links.artworkSource != 'bandcamp') {
+
+			post.links.artwork = data.artwork;
+			post.links.artworkSource = data.type;
+		}
+	} 
 
 	if (data.type == 'beatport') {
 
@@ -232,12 +279,149 @@ function addToPost(data) {
 		post.links.youtube = data.link;
 		post.links.bandcamp = data.bcLink;
 		post.links.itunes = data.itLink;
-		post.links.spotify = data.spLink;
+
+		if (data.spLink != "Coming Soon") {
+			post.links.spotify = data.spLink;
+		}
 	}
 
 	if (post.trackTitle && post.artist) {
+
 		post.title = post.artist + " - " + post.trackTitle + " Megathread";
 	}
 
-	console.log(post);
+	updatePost();
 }
+
+function redditLogin() {
+
+	var options = {
+
+		url: 'https://ssl.reddit.com/api/login?api_type=json&user=' + settings.username + '&passwd=' + settings.password + '&rem=True',
+		headers: {
+			'User-Agent': userAgent,
+		},
+		method: 'POST'
+	};
+
+	request(options, function(err, res, body) {
+
+		body = JSON.parse(body).json.data;
+
+		modhash = body.modhash;
+		cookie = 'reddit_session=' + encodeURIComponent(body.cookie);
+	});
+}
+
+function updatePost() {
+
+	if (!modhash || !cookie) {
+
+		redditLogin();
+	}
+
+	if (modhash && cookie && post.title) {
+
+		var compiledPost = "";
+
+		if (post.links.youtube) {
+			compiledPost += "[Watch on YouTube](" + post.links.youtube + ")\n\n";
+		}
+
+		if (post.links.beatport) {
+
+			compiledPost += "[Support on Beatport](" + post.links.beatport + ")\n\n";
+		}
+
+		if (post.links.bandcamp) {
+
+			compiledPost += "[Support on Bandcamp](" + post.links.bandcamp + ")\n\n";
+		}
+
+		if (post.links.itunes) {
+
+			compiledPost += "[Support on iTunes](" + post.links.itunes + ")\n\n";
+		}
+
+		if (post.links.soundcloud) {
+
+			compiledPost += "[Stream on SoundCloud](" + post.links.soundcloud + ")\n\n";
+		}
+
+		if (post.links.spotify) {
+
+			compiledPost += "[Stream on Spotify](" + post.links.spotify + ")\n\n";
+		}
+
+		if (post.links.artwork) {
+
+			compiledPost += "[Download the album art](" + post.links.artwork + ")\n\n";
+		}
+		compiledPost += "___\n\nAll discussion about this release goes below. Please post hype about the next release in the Next Release thread.\n\n*This is an automated post by a bot. If I did something wrong please message me.*";
+
+		var options;
+		if (!postSubmitted) {
+
+			options = {
+
+				url: "http://www.reddit.com/api/submit?"
+					+ "api_type=json"
+					+ "&kind=self"
+					+ "&sendreplies=false"
+					+ "&sr=3vans_sandbox"
+					+ "&title=" + encodeURIComponent(post.title)
+					+ "&text=" + encodeURIComponent(compiledPost),
+				headers: {
+
+					"User-Agent": userAgent,
+					"X-Modhash": modhash,
+					"Cookie": cookie
+				},
+				method: "POST"
+			};
+		} else {
+
+			options = {
+
+				url: "http://www.reddit.com/api/editusertext?"
+					+ "api_type=json"
+					+ "&thing_id=" + currentThread
+					+ "&text=" + encodeURIComponent(compiledPost),
+				headers: {
+
+					"User-Agent": userAgent,
+					"X-Modhash": modhash,
+					"Cookie": cookie
+				},
+				method: "POST"
+			}
+		}
+
+		request(options, function(err, res, body) {
+
+			if (!err && res.statusCode == 200) {
+
+				if (!JSON.parse(body).json.data) {
+
+					console.log(body);
+				} else if (postSubmitted) {
+
+					currentThread = JSON.parse(body).json.data.id;
+					postSubmitted = true;
+					console.log('ENGIN: Post completed successfully at', currentThread);
+				} else {
+
+					console.log('ENGIN: Edit completed successfully');
+				}
+			} else if (err) {
+
+				throw err;
+			} else {
+
+				console.log('RDDIT: ' + res.statusCode + ' - ' + res.body);
+			}
+		});
+	}
+}
+
+setInterval(update, 10000);
