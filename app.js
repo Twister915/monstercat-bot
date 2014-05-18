@@ -53,12 +53,11 @@ var userAgent = 'monstercat-bot/0.1.0 by 3vans'	// Maybe change this to your bot
 
 function update() {
 
-
 	var date = new Date();
 
 	if (date.getUTCDay == 1 || date.getUTCDay == 3 || date.getUTCDay == 5) {	// Is it a day in which we should be posting on?
 
-		if (date.getHours() == 0 && postedToday === false) {	// Is it time to post?
+		if (date.getHours() == 0) {	// Is it time to post?
 
 			bpData, bcData, scData, ytData, modhash, cookie, postSubmitted, currentThread = false;	// Clear variables
 			post = {	// Clear the post variables
