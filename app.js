@@ -255,13 +255,21 @@ function youtube(err, res, body) {
 		ytData = {
 
 			type: "youtube",
-			title: track.title.split(" - ")[2].split(" [")[0],
 			date: track.publishedAt.slice(0, -14),
-			artist: track.title.split(" - ")[1],
 			link: "http://www.youtube.com/watch?v=" + track.resourceId.videoId,
 			bcLink: track.description.split("\n")[1].slice(21),
 			itLink: track.description.split("\n")[2].slice(19),
 			spLink: track.description.split("\n")[5].slice(19)
+		}
+
+		if (track.title.split(" - ")[2]) {
+
+			ytData.title = track.title.split(" - ")[2].split(" [")[0]
+			ytData.artist = track.title.split(" - ")[1]
+		} else if (track.title.split(" - ")[1]) {
+
+			ytData.title = track.title.split(" - ")[1].split(" [")[0]
+			ytData.artist = track.title.split(" - ")[0]
 		}
 
 		if (ytData.link != latest.youtube) {
@@ -425,7 +433,7 @@ function updatePost() {
 					+ "api_type=json"
 					+ "&kind=self"
 					+ "&sendreplies=false"
-					+ "&sr=Monstercat"
+					+ "&sr=3vans_sandbox"
 					+ "&title=" + encodeURIComponent(post.title)
 					+ "&text=" + encodeURIComponent(compiledPost),
 				headers: {
