@@ -55,11 +55,11 @@ function update() {
 
 	var date = new Date();
 
-	if (date.getUTCDay == 1 || date.getUTCDay == 3 || date.getUTCDay == 5) {	// Is it a day in which we should be posting on?
+	if (date.getUTCDay() == 1 || date.getUTCDay() == 3 || date.getUTCDay() == 5) {	// Is it a day in which we should be posting on?
 
-		if (date.getHours() == 0) {	// Is it time to post?
+		if (date.getHours() == 0) {	// Is it time to reset?
 
-			bpData, bcData, scData, ytData, modhash, cookie, postSubmitted, currentThread = false;	// Clear variables
+			bpData = bcData = scData = ytData = modhash = cookie = postSubmitted = currentThread = false;	// Clear variables
 			post = {	// Clear the post variables
 
 				title: "",
@@ -77,6 +77,8 @@ function update() {
 					artworkSource: ""
 				}
 			}
+
+			console.log('ENGIN: Reset successful!');
 		}
 	}
 
