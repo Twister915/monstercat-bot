@@ -220,24 +220,27 @@ function soundcloud(err, res, body) {
 
 		var track = JSON.parse(body)[0];
 
-		scData = {
+		if (track.title.split("-")[1].slice(1)) {
 
-			type: "soundcloud",
-			title: track.title.split("-")[1].slice(1),
-			date: track.release_year + "-" + track.release_month + "-" + track.release_day,
-			artist: track.title.split("-")[0].slice(0, -1),
-			link: track.permalink_url,
-			artwork: track.artwork_url
-		}
+			scData = {
 
-		if (scData.link != latest.soundcloud) {
+				type: "soundcloud",
+				title: track.title.split("-")[1].slice(1),
+				date: track.release_year + "-" + track.release_month + "-" + track.release_day,
+				artist: track.title.split("-")[0].slice(0, -1),
+				link: track.permalink_url,
+				artwork: track.artwork_url
+			}
 
-			addToPost(scData);
+			if (scData.link != latest.soundcloud) {
 
-			latest.soundcloud = scData.link;
-			writeData(latest);
+				addToPost(scData);
 
-			console.log("SNCLD: RECIEVED RESPONSE");
+				latest.soundcloud = scData.link;
+				writeData(latest);
+
+				console.log("SNCLD: RECIEVED RESPONSE");
+			}
 		}
 	} else if (err) {
 
@@ -254,34 +257,37 @@ function youtube(err, res, body) {
 
 		var track = JSON.parse(body).items[0].snippet;
 
-		ytData = {
+		if (track.title.split(" - ")[1]) {
 
-			type: "youtube",
-			date: track.publishedAt.slice(0, -14),
-			link: "http://www.youtube.com/watch?v=" + track.resourceId.videoId,
-			bcLink: track.description.split("\n")[1].slice(21),
-			itLink: track.description.split("\n")[2].slice(19),
-			spLink: track.description.split("\n")[5].slice(19)
-		}
+			ytData = {
 
-		if (track.title.split(" - ")[2]) {
+				type: "youtube",
+				date: track.publishedAt.slice(0, -14),
+				link: "http://www.youtube.com/watch?v=" + track.resourceId.videoId,
+				bcLink: track.description.split("\n")[1].slice(21),
+				itLink: track.description.split("\n")[2].slice(19),
+				spLink: track.description.split("\n")[5].slice(19)
+			}
 
-			ytData.title = track.title.split(" - ")[2].split(" [")[0]
-			ytData.artist = track.title.split(" - ")[1]
-		} else if (track.title.split(" - ")[1]) {
+			if (track.title.split(" - ")[2]) {
 
-			ytData.title = track.title.split(" - ")[1].split(" [")[0]
-			ytData.artist = track.title.split(" - ")[0]
-		}
+				ytData.title = track.title.split(" - ")[2].split(" [")[0]
+				ytData.artist = track.title.split(" - ")[1]
+			} else if (track.title.split(" - ")[1]) {
 
-		if (ytData.link != latest.youtube) {
+				ytData.title = track.title.split(" - ")[1].split(" [")[0]
+				ytData.artist = track.title.split(" - ")[0]
+			}
 
-			addToPost(ytData);
+			if (ytData.link != latest.youtube) {
 
-			latest.youtube = ytData.link;
-			writeData(latest);
+				addToPost(ytData);
 
-			console.log("YOUTB: RECIEVED RESPONSE");
+				latest.youtube = ytData.link;
+				writeData(latest);
+
+				console.log("YOUTB: RECIEVED RESPONSE");
+			}
 		}
 	} else if (err) {
 
