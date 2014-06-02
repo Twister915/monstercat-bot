@@ -51,6 +51,11 @@ var post = {	// Build post data
 }
 var userAgent = 'monstercat-bot/0.1.0 by 3vans'	// Maybe change this to your bot's name if you reuse code
 
+/* Uncaught Error Handler */
+process.on('uncaughtException', function (err) {
+	console.error(err);
+});
+
 function update() {
 
 	var date = new Date();
