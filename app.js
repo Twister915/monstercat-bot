@@ -65,6 +65,11 @@ var feed = new rss({
 
 var xml = feed.xml('  ');
 
+/* Uncaught Error Handler */
+process.on('uncaughtException', function (err) {
+	console.error(err);
+});
+
 /* Declare functions */
 function update() {
 
