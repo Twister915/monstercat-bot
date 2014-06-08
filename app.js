@@ -1,5 +1,7 @@
 /* Import modules */
 var fs = require('fs');
+var rss = require('rss');
+var http = require('http');
 var request = require('request');
 var cheerio = require('cheerio');
 var settings = require('./settings.js');
@@ -31,7 +33,7 @@ var postedToday = false;
 var beatportURL = "http://www.beatport.com/label/monstercat/23412";	// These are the links we're going to crawl/request
 var soundcloudURL = "https://api.soundcloud.com/users/8553751/tracks.json?client_id=" + settings.scApiKey;
 var youtubeURL = "https://www.googleapis.com/youtube/v3/playlistItems?playlistId=UUJ6td3C9QlPO9O_J5dF4ZzA&key=" + settings.ytApiKey + "&part=snippet&maxResults=1";
-var bpData, bcData, scData, ytData, modhash, cookie, currentThread, postSubmittable, postSubmitted = false;
+var date, bpData, bcData, scData, ytData, modhash, cookie, currentThread, postSubmittable, postSubmitted = false;
 var post = {	// Build post data
 
 	title: "",
@@ -51,9 +53,22 @@ var post = {	// Build post data
 }
 var userAgent = 'monstercat-bot/0.1.0 by 3vans'	// Maybe change this to your bot's name if you reuse code
 
+/* Initiate RSS */
+var feed = new rss({
+
+	title: 'Monstercat Megathread Updates',
+	description: 'The most recent Monstercat releases on different sites',
+	feed_url: 'http://huw.nu:9001/',
+	site_url: 'http://www.reddit.com/r/Monstercat',
+	author: 'Huw Evans (reddit.com/u/3vans)',
+});
+
+var xml = feed.xml('  ');
+
+/* Declare functions */
 function update() {
 
-	var date = new Date();
+	date = new Date();
 
 	if (date.getUTCDay() == 1 || date.getUTCDay() == 3 || date.getUTCDay() == 5) {	// Is it a day in which we should be posting on?
 
@@ -165,6 +180,7 @@ function beatport(err, res, body) {
 			if (bpData.link != latest.beatport) {
 
 				addToPost(bpData);
+				addToFeed(bpData.type, bpData.link);
 
 				latest.beatport = bpData.link;
 				writeData(latest);
@@ -198,6 +214,7 @@ function bandcamp(err, res, body) {	// Note: There is no mechanism to pull bandc
 		if (bcData.artwork != latest.bandcamp) {
 
 			addToPost(bcData);
+			addToPost(bcData.type, post.links.bandcamp);
 
 			latest.bandcamp = bcData.artwork;
 			writeData(latest);
@@ -229,12 +246,16 @@ function soundcloud(err, res, body) {
 				date: track.release_year + "-" + track.release_month + "-" + track.release_day,
 				artist: track.title.split("-")[0].slice(0, -1),
 				link: track.permalink_url,
-				artwork: track.artwork_url
+				artwork: track.artwork_url,
+				bcLink: track.description.split("&#13;\n")[6].slice(21),
+				itLink: track.description.split("&#13;\n")[4].slice(19),
+				spLink: track.description.split("&#13;\n")[9].slice(19)
 			}
 
 			if (scData.link != latest.soundcloud) {
 
 				addToPost(scData);
+				addToFeed(scData.type, scData.link);
 
 				latest.soundcloud = scData.link;
 				writeData(latest);
@@ -264,8 +285,8 @@ function youtube(err, res, body) {
 				type: "youtube",
 				date: track.publishedAt.slice(0, -14),
 				link: "http://www.youtube.com/watch?v=" + track.resourceId.videoId,
-				bcLink: track.description.split("\n")[1].slice(21),
-				itLink: track.description.split("\n")[2].slice(19),
+				bcLink: track.description.split("\n")[2].slice(21),
+				itLink: track.description.split("\n")[0].slice(19),
 				spLink: track.description.split("\n")[5].slice(19)
 			}
 
@@ -282,6 +303,7 @@ function youtube(err, res, body) {
 			if (ytData.link != latest.youtube) {
 
 				addToPost(ytData);
+				addToFeed(ytData.type, ytData.link);
 
 				latest.youtube = ytData.link;
 				writeData(latest);
@@ -296,6 +318,26 @@ function youtube(err, res, body) {
 
 		console.log('YOUTB: ' + res.statusCode + ' - ' + res.body);
 	}
+}
+
+function addToFeed(type, url) {
+
+	console.log('RFEED: Logging new ' + type + ' release');
+
+	feed.item({
+
+		title: post.trackTitle + ' is now available on ' + type,
+		description: 
+			post.trackTitle + 
+			' by ' + 
+			post.artist + 
+			' was just released on ' +
+			type,
+		url: url,
+		date: date.toDateString() 
+	});
+
+	xml = feed.xml('  ');
 }
 
 function addToPost(data) {
@@ -340,17 +382,46 @@ function addToPost(data) {
 	if (data.type == 'soundcloud') {
 
 		post.links.soundcloud = data.link;
+
+		if (!post.links.bandcamp) {
+			
+			post.links.bandcamp = data.bcLink;
+			addToFeed('bandcamp', data.bcLink);
+		}
+
+		if (!post.links.itunes) {
+			
+			post.links.itunes = data.itLink;
+			addToFeed('itunes', data.itLink);
+		}
+
+		if (!post.links.spotify && data.spLink != "Coming Soon") {
+
+			post.links.spotify = data.spLink;
+			addToFeed('spotify', data.spLink);
+		}
 	}
 
 	if (data.type == 'youtube') {
 
 		post.links.youtube = data.link;
-		post.links.bandcamp = data.bcLink;
-		post.links.itunes = data.itLink;
 
-		if (data.spLink != "Coming Soon") {
+		if (!post.links.bandcamp) {
+			
+			post.links.bandcamp = data.bcLink;
+			addToFeed('bandcamp', data.bcLink);
+		}
+
+		if (!post.links.itunes) {
+			
+			post.links.itunes = data.itLink;
+			addToFeed('itunes', data.itLink);
+		}
+
+		if (!post.links.spotify && data.spLink != "Coming Soon") {
 
 			post.links.spotify = data.spLink;
+			addToFeed('spotify', data.spLink);
 		}
 	}
 
@@ -359,7 +430,7 @@ function addToPost(data) {
 		post.title = post.artist + " - " + post.trackTitle + " Megathread";
 	}
 
-	updatePost();
+	//updatePost();
 }
 
 function redditLogin() {
@@ -562,3 +633,10 @@ function stickyThread(err, res, body) {
 
 update();
 setInterval(update, 300000);
+
+/* Run RSS server */
+http.createServer(function (req, res) {
+
+  res.writeHead(200, {'Content-Type': 'application/rss+xml'});
+  res.end(xml);
+}).listen(9001, '127.0.0.1');
