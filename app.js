@@ -506,7 +506,7 @@ function updatePost() {
 		+ "\n\n"
 		+ "All discussion about this release goes below. Please post hype about the next release in the Next Release thread. I do not recieve karma for this post."
 		+ "\n\n"
-		+ "*This is an automated post by a bot. If I did something wrong please message me.*";
+		+ "[RSS for releases](http://huw.nu:9001) - [Email me](ift.tt/1oJ8TsH) - Notify me: [Android](ift.tt/1kIhBYU)";
 
 		var options;
 		if (!postSubmitted) {
