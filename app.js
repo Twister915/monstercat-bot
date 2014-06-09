@@ -29,11 +29,10 @@ function writeData(data) {
 }
 
 /* Declare globals */
-var postedToday = false;
 var beatportURL = "http://www.beatport.com/label/monstercat/23412";	// These are the links we're going to crawl/request
 var soundcloudURL = "https://api.soundcloud.com/users/8553751/tracks.json?client_id=" + settings.scApiKey;
 var youtubeURL = "https://www.googleapis.com/youtube/v3/playlistItems?playlistId=UUJ6td3C9QlPO9O_J5dF4ZzA&key=" + settings.ytApiKey + "&part=snippet&maxResults=1";
-var date, bpData, bcData, scData, ytData, modhash, cookie, currentThread, postSubmittable, postSubmitted = false;
+var date, bpData, bcData, scData, ytData, modhash, cookie, postSubmitted = false;
 var post = {	// Build post data
 
 	title: "",
@@ -79,7 +78,7 @@ function update() {
 
 		if (date.getHours() == 0) {	// Is it time to reset?
 
-			bpData = bcData = scData = ytData = modhash = cookie = postSubmitted = currentThread = false;	// Clear variables
+			bpData = bcData = scData = ytData = modhash = cookie = postSubmitted = latest.currentThread = false;	// Clear variables
 			post = {	// Clear the post variables
 
 				title: "",
@@ -97,6 +96,11 @@ function update() {
 					artworkSource: ""
 				}
 			}
+
+			latest.postSubmitted = false;
+			latest.postedToday = false;
+			latest.latest.currentThread = "";
+			writeData(latest);
 
 			console.log('ENGIN: Reset successful!');
 		}
@@ -509,7 +513,7 @@ function updatePost() {
 		+ "[RSS for releases](http://huw.nu:9001) - [Email me](ift.tt/1oJ8TsH) - Notify me: [Android](ift.tt/1kIhBYU)";
 
 		var options;
-		if (!postSubmitted) {
+		if (!latest.postSubmitted) {
 
 			options = {
 
@@ -534,7 +538,7 @@ function updatePost() {
 
 				url: "http://www.reddit.com/api/editusertext?"
 					+ "api_type=json"
-					+ "&thing_id=" + currentThread
+					+ "&thing_id=" + latest.currentThread
 					+ "&text=" + encodeURIComponent(compiledPost),
 				headers: {
 
@@ -553,19 +557,20 @@ function updatePost() {
 				if (!JSON.parse(body).json.data) {
 
 					console.log(body);
-				} else if (!postSubmitted) {
+				} else if (!latest.postSubmitted) {
 
-					currentThread = JSON.parse(body).json.data.name;
-					postSubmitted = true;
-					postedToday = true;
-					console.log('ENGIN: Post completed successfully at', currentThread);
+					latest.postSubmitted = true;
+					latest.postedToday = true;
+					latest.currentThread = JSON.parse(body).json.data.name;
+					writeData(latest);
+					console.log('ENGIN: Post completed successfully at', latest.currentThread);
 
 					options = {
 
 						url: "http://www.reddit.com/api/distinguish?"
 							+ "api_type=json"
 							+ "&how=yes"
-							+ "&id=" + currentThread,
+							+ "&id=" + latest.currentThread,
 						headers: {
 
 							"User-Agent": userAgent,
@@ -581,7 +586,7 @@ function updatePost() {
 
 						url: "http://www.reddit.com/api/set_subreddit_sticky?"
 							+ "api_type=json"
-							+ "&id=" + currentThread
+							+ "&id=" + latest.currentThread
 							+ "&state=true",
 						headers: {
 
