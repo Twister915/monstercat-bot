@@ -435,7 +435,7 @@ function addToPost(data) {
 		post.title = post.artist + " - " + post.trackTitle + " Megathread";
 	}
 
-	//updatePost();
+	updatePost();
 }
 
 function redditLogin() {
