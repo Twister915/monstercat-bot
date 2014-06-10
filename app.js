@@ -111,10 +111,7 @@ function update() {
 
 function updateSources() {
 
-	if (!cookie || !modhash) {
-
-		redditLogin();
-	}
+	redditLogin();
 
 	if (!post.links.beatport) {
 
@@ -256,8 +253,8 @@ function soundcloud(err, res, body) {
 				artist: track.title.split("-")[0].slice(0, -1),
 				link: track.permalink_url,
 				artwork: track.artwork_url,
-				bcLink: track.description.split("&#13;\n")[6].slice(21),
-				itLink: track.description.split("&#13;\n")[4].slice(19),
+				bcLink: track.description.split("&#13;\n")[5].slice(21),
+				itLink: track.description.split("&#13;\n")[6].slice(19),
 				spLink: track.description.split("&#13;\n")[9].slice(19)
 			}
 
@@ -294,8 +291,8 @@ function youtube(err, res, body) {
 				type: "youtube",
 				date: track.publishedAt.slice(0, -14),
 				link: "http://www.youtube.com/watch?v=" + track.resourceId.videoId,
-				bcLink: track.description.split("\n")[2].slice(21),
-				itLink: track.description.split("\n")[0].slice(19),
+				bcLink: track.description.split("\n")[1].slice(21),
+				itLink: track.description.split("\n")[2].slice(19),
 				spLink: track.description.split("\n")[5].slice(19)
 			}
 
@@ -442,7 +439,7 @@ function addToPost(data) {
 	updatePost();
 }
 
-function redditLogin() {
+function redditLogin(callback) {
 
 	var options = {
 
@@ -459,6 +456,13 @@ function redditLogin() {
 
 		modhash = body.modhash;
 		cookie = 'reddit_session=' + encodeURIComponent(body.cookie);
+		
+		if (callback === true) {
+
+			updatePost();
+		}
+
+		console.log('RDDIT: Login successful');
 	});
 }
 
@@ -466,7 +470,7 @@ function updatePost() {
 
 	if (!modhash || !cookie) {
 
-		redditLogin();
+		redditLogin(true);
 	}
 
 	if (modhash && cookie && post.title) {
@@ -508,9 +512,9 @@ function updatePost() {
 		}
 		compiledPost += "___"
 		+ "\n\n"
-		+ "All discussion about this release goes below. Please post hype about the next release in the Next Release thread. I do not recieve karma for this post."
+		+ "All discussion about this release goes below. Please post hype about the next release in the Next Release thread."
 		+ "\n\n"
-		+ "[RSS for releases](http://huw.nu:9001) - [Email me](ift.tt/1oJ8TsH) - Notify me: [Android](ift.tt/1kIhBYU)";
+		+ "[RSS for releases](http://huw.nu:9001) - [Email updates](http://ift.tt/1oJ8TsH) - Notify me: [Android](http://ift.tt/1kIhBYU)/[iOS](http://ift.tt/1ijjNS7)";
 
 		var options;
 		if (!latest.postSubmitted) {
