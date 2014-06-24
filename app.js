@@ -64,11 +64,6 @@ var feed = new rss({
 
 var xml = feed.xml('  ');
 
-/* Uncaught Error Handler */
-process.on('uncaughtException', function (err) {
-	console.error(err);
-});
-
 /* Declare functions */
 function update() {
 
@@ -99,7 +94,7 @@ function update() {
 
 			latest.postSubmitted = false;
 			latest.postedToday = false;
-			latest.latest.currentThread = "";
+			latest.currentThread = "";
 			writeData(latest);
 
 			console.log('ENGIN: Reset successful!');
@@ -243,7 +238,7 @@ function soundcloud(err, res, body) {
 
 		var track = JSON.parse(body)[0];
 
-		if (track.title.split("-")[1].slice(1)) {
+		if (track.title.split("-")[1] != undefined) {
 
 			scData = {
 
@@ -253,9 +248,9 @@ function soundcloud(err, res, body) {
 				artist: track.title.split("-")[0].slice(0, -1),
 				link: track.permalink_url,
 				artwork: track.artwork_url,
-				bcLink: track.description.split("&#13;\n")[5].slice(21),
-				itLink: track.description.split("&#13;\n")[6].slice(19),
-				spLink: track.description.split("&#13;\n")[9].slice(19)
+				bcLink: track.description.split("\n")[5].slice(21),
+				itLink: track.description.split("\n")[6].slice(19),
+				spLink: track.description.split("\n")[9].slice(19)
 			}
 
 			if (scData.link != latest.soundcloud) {
@@ -284,7 +279,7 @@ function youtube(err, res, body) {
 
 		var track = JSON.parse(body).items[0].snippet;
 
-		if (track.title.split(" - ")[1]) {
+		if (track.title.split(" - ")[1] != undefined) {
 
 			ytData = {
 
@@ -296,7 +291,7 @@ function youtube(err, res, body) {
 				spLink: track.description.split("\n")[5].slice(19)
 			}
 
-			if (track.title.split(" - ")[2]) {
+			if (track.title.split(" - ")[2] != undefined) {
 
 				ytData.title = track.title.split(" - ")[2].split(" [")[0]
 				ytData.artist = track.title.split(" - ")[1]
@@ -461,8 +456,6 @@ function redditLogin(callback) {
 
 			updatePost();
 		}
-
-		console.log('RDDIT: Login successful');
 	});
 }
 
@@ -514,7 +507,7 @@ function updatePost() {
 		+ "\n\n"
 		+ "All discussion about this release goes below. Please post hype about the next release in the Next Release thread."
 		+ "\n\n"
-		+ "[RSS for releases](http://huw.nu:9001) - [Email updates](http://ift.tt/1oJ8TsH) - Notify me: [Android](http://ift.tt/1kIhBYU)/[iOS](http://ift.tt/1ijjNS7)";
+		+ "[RSS for releases](http://huw.nu:9001) - [Email updates](https://ifttt.com/recipes/181318-email-me-the-latest-monstercat-release-as-it-becomes-available-on-different-outlets) - Notify me: [Android](https://ifttt.com/recipes/181320-let-me-know-when-a-monstercat-release-becomes-available-on-a-new-outlet)/[iOS](https://ifttt.com/recipes/181457-let-me-know-when-a-monstercat-release-becomes-available-on-a-new-outlet)";
 
 		var options;
 		if (!latest.postSubmitted) {
