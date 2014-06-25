@@ -4,6 +4,7 @@ var rss = require('rss');
 var http = require('http');
 var request = require('request');
 var cheerio = require('cheerio');
+var unshorten = require('unshorten');
 var settings = require('./settings.js');
 
 /* Import Data */
@@ -32,7 +33,7 @@ function writeData(data) {
 var beatportURL = "http://www.beatport.com/label/monstercat/23412";	// These are the links we're going to crawl/request
 var soundcloudURL = "https://api.soundcloud.com/users/8553751/tracks.json?client_id=" + settings.scApiKey;
 var youtubeURL = "https://www.googleapis.com/youtube/v3/playlistItems?playlistId=UUJ6td3C9QlPO9O_J5dF4ZzA&key=" + settings.ytApiKey + "&part=snippet&maxResults=1";
-var date, bpData, bcData, scData, ytData, modhash, cookie, postSubmitted = false;
+var date = bpData = bcData = scData = ytData = modhash = cookie = postSubmitted = false;
 var post = {	// Build post data
 
 	title: "",
@@ -64,6 +65,10 @@ var feed = new rss({
 
 var xml = feed.xml('  ');
 
+process.on('uncaughtException', function (err) {
+	console.error(err);
+});
+
 /* Declare functions */
 function update() {
 
@@ -71,7 +76,7 @@ function update() {
 
 	if (date.getUTCDay() == 1 || date.getUTCDay() == 3 || date.getUTCDay() == 5) {	// Is it a day in which we should be posting on?
 
-		if (date.getHours() == 0) {	// Is it time to reset?
+		if (date.getHours() == 0 && date.getMinutes() < 6) {	// Is it time to reset?
 
 			bpData = bcData = scData = ytData = modhash = cookie = postSubmitted = latest.currentThread = false;	// Clear variables
 			post = {	// Clear the post variables
@@ -240,29 +245,56 @@ function soundcloud(err, res, body) {
 
 		if (track.title.split("-")[1] != undefined) {
 
-			scData = {
+			scData = {}
 
-				type: "soundcloud",
-				title: track.title.split("-")[1].slice(1),
-				date: track.release_year + "-" + track.release_month + "-" + track.release_day,
-				artist: track.title.split("-")[0].slice(0, -1),
-				link: track.permalink_url,
-				artwork: track.artwork_url,
-				bcLink: track.description.split("\n")[5].slice(21),
-				itLink: track.description.split("\n")[6].slice(19),
-				spLink: track.description.split("\n")[9].slice(19)
+			for (var i = 4; i < 10; i++) {
+				
+				if (track.description.split("&#13;\n")[i] != "---") {
+
+					var url = track.description.split("&#13;\n")[i].split(": ")[1];
+
+					unshorten(url, function(unshortened) {
+							
+						var domain = unshortened.match(/^https?\:\/\/([^\/?#]+)(?:[\/?#]|$)/i);
+						domain = domain && domain[1];
+
+						if (domain == "open.spotify.com") {
+
+							scData.spLink = unshortened;
+						} else if (domain == "music.monstercat.com") {
+
+							scData.bcLink = unshortened;
+						} else if (domain == "msclvr.co") {
+
+							unshorten(unshortened, function(ununshortened) {
+
+								scData.itLink = ununshortened;
+							});
+						}
+					});
+				}
 			}
 
-			if (scData.link != latest.soundcloud) {
+			scData.type = "soundcloud"
+			scData.title = track.title.split("-")[1].slice(1)
+			scData.date = track.release_year + "-" + track.release_month + "-" + track.release_day
+			scData.artist = track.title.split("-")[0].slice(0, -1)
+			scData.link = track.permalink_url
+			scData.artwork = track.artwork_url
 
-				addToPost(scData);
-				addToFeed(scData.type, scData.link);
+			setTimeout(function(){
 
-				latest.soundcloud = scData.link;
-				writeData(latest);
+				if (scData.link != latest.soundcloud) {
 
-				console.log("SNCLD: RECIEVED RESPONSE");
-			}
+					addToPost(scData);
+					addToFeed(scData.type, scData.link);
+
+					latest.soundcloud = scData.link;
+					writeData(latest);
+
+					console.log("SNCLD: RECIEVED RESPONSE");
+				}
+			}, 4000);
 		}
 	} else if (err) {
 
@@ -281,15 +313,39 @@ function youtube(err, res, body) {
 
 		if (track.title.split(" - ")[1] != undefined) {
 
-			ytData = {
+			ytData = {}
 
-				type: "youtube",
-				date: track.publishedAt.slice(0, -14),
-				link: "http://www.youtube.com/watch?v=" + track.resourceId.videoId,
-				bcLink: track.description.split("\n")[1].slice(21),
-				itLink: track.description.split("\n")[2].slice(19),
-				spLink: track.description.split("\n")[5].slice(19)
-			}
+                        for (var i = 0; i < 6; i++) {
+
+                                if (track.description.split("\n")[i] != "---") {
+
+                                        url = track.description.split("\n")[i].split(": ")[1];
+
+                                        unshorten(url, function(unshortened) {
+
+                                                var domain = unshortened.match(/^https?\:\/\/([^\/?#]+)(?:[\/?#]|$)/i);
+                                                domain = domain && domain[1];
+
+                                                if (domain == "open.spotify.com") {
+
+                                                        ytData.spLink = unshortened;
+                                                } else if (domain == "music.monstercat.com") {
+
+                                                        ytData.bcLink = unshortened;
+                                                } else if (domain == "msclvr.co") {
+
+                                                        unshorten(unshortened, function(ununshortened) {
+
+                                                                ytData.itLink = ununshortened;
+                                                        });
+                                                }
+                                        });
+                                }
+                        }
+
+			ytData.type = "youtube"
+			ytData.date = track.publishedAt.slice(0, -14)
+			ytData.link = "http://www.youtube.com/watch?v=" + track.resourceId.videoId
 
 			if (track.title.split(" - ")[2] != undefined) {
 
@@ -327,7 +383,7 @@ function addToFeed(type, url) {
 
 	feed.item({
 
-		title: post.trackTitle + ' is now available on ' + type,
+		title: post.trackTitle + ' now on ' + type,
 		description: 
 			post.trackTitle + 
 			' by ' + 
@@ -595,6 +651,24 @@ function updatePost() {
 					};
 
 					request(options, stickyThread);
+
+					options = {
+
+						url: "http://www.reddit.com/r/Monstercat/api/flair?"
+							+ "api_type=json"
+							+ "&css_class=release"
+							+ "&link=" + latest.currentThread
+							+ "&text=Monstercat%20Release",
+						headers: {
+
+							"User-Agent": userAgent,
+							"X-Modhash": modhash,
+							"Cookie": cookie
+						},
+						method: "POST"
+					};
+
+					request(options, flairThread);
 				} else {
 
 					console.log('ENGIN: Edit completed successfully');
@@ -638,8 +712,22 @@ function stickyThread(err, res, body) {
 	}
 }
 
+function flairThread(err, res, body) {
+
+        if (!err && res.statusCode == 200) {
+
+                console.log('RDDIT: Flaired thread successfully');
+        } else if (err) {
+
+                throw err;
+        } else {
+
+                console.log('RDDIT: ' + res.statusCode + ' - ' + res.body);
+        }
+}
+
 update();
-setInterval(update, 300000);
+setInterval(update, 299000);
 
 /* Run RSS server */
 http.createServer(function (req, res) {
