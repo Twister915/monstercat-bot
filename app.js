@@ -123,9 +123,15 @@ function updateSources() {
 		request(soundcloudURL, soundcloud);
 	}
 
-	if (!post.links.youtube || !post.links.bandcamp) {
+	if (!post.links.youtube) {
 
 		request(youtubeURL, youtube);
+	}
+
+	if (!post.links.bandcamp) {
+
+		request(youtubeURL, youtube);
+		request(soundcloudURL, soundcloud);
 	}
 
 	if (post.links.artworkSource != 'bandcamp' && post.links.bandcamp) {
@@ -247,12 +253,14 @@ function soundcloud(err, res, body) {
 
 			scData = {}
 
+			var urlregex = new RegExp(/[-a-zA-Z0-9@:%_\+.~#?&//=]{2,256}\.[a-z]{2,4}\b(\/[-a-zA-Z0-9@:%_\+.~#?&//=]*)?/gi);
+
 			for (var i = 4; i < 10; i++) {
-				
-				if (track.description.split("&#13;\n")[i] != "---") {
+
+				if (track.description.split("&#13;\n")[i].match(urlregex) && track.description.split("&#13;\n")[i][0]) {
 
 					var url = track.description.split("&#13;\n")[i].split(": ")[1];
-
+					
 					unshorten(url, function(unshortened) {
 							
 						var domain = unshortened.match(/^https?\:\/\/([^\/?#]+)(?:[\/?#]|$)/i);
@@ -270,6 +278,9 @@ function soundcloud(err, res, body) {
 
 								scData.itLink = ununshortened;
 							});
+						} else if (domain == "youtube.com") {
+
+							scData.ytLink = unshortened;
 						}
 					});
 				}
@@ -308,18 +319,19 @@ function soundcloud(err, res, body) {
 function youtube(err, res, body) {
 
 	if (!err && res.statusCode == 200) {
-
 		var track = JSON.parse(body).items[0].snippet;
 
 		if (track.title.split(" - ")[1] != undefined) {
 
 			ytData = {}
 
+			var urlregex = new RegExp(/[-a-zA-Z0-9@:%_\+.~#?&//=]{2,256}\.[a-z]{2,4}\b(\/[-a-zA-Z0-9@:%_\+.~#?&//=]*)?/gi);
+
                         for (var i = 0; i < 6; i++) {
 
-                                if (track.description.split("\n")[i] != "---") {
+                                if (track.description.split("\n")[i].match(urlregex) && track.description.split("\n")[i][0] == 'h') {
 
-                                        url = track.description.split("\n")[i].split(": ")[1];
+                                        url = track.description.split("\n")[i];
 
                                         unshorten(url, function(unshortened) {
 
@@ -338,7 +350,10 @@ function youtube(err, res, body) {
 
                                                                 ytData.itLink = ununshortened;
                                                         });
-                                                }
+                                                } else if (domain == "soundcloud.com") {
+
+							ytData.scLink = unshortened;
+						}
                                         });
                                 }
                         }
@@ -346,7 +361,7 @@ function youtube(err, res, body) {
 			ytData.type = "youtube"
 			ytData.date = track.publishedAt.slice(0, -14)
 			ytData.link = "http://www.youtube.com/watch?v=" + track.resourceId.videoId
-
+			
 			if (track.title.split(" - ")[2] != undefined) {
 
 				ytData.title = track.title.split(" - ")[2].split(" [")[0]
@@ -357,16 +372,19 @@ function youtube(err, res, body) {
 				ytData.artist = track.title.split(" - ")[0]
 			}
 
-			if (ytData.link != latest.youtube) {
+			setTimeout(function() {
 
-				addToPost(ytData);
-				addToFeed(ytData.type, ytData.link);
+				if (ytData.link != latest.youtube) {
 
-				latest.youtube = ytData.link;
-				writeData(latest);
+					addToPost(ytData);
+					addToFeed(ytData.type, ytData.link);
 
-				console.log("YOUTB: RECIEVED RESPONSE");
-			}
+					latest.youtube = ytData.link;
+					writeData(latest);
+
+					console.log("YOUTB: RECIEVED RESPONSE");
+				}
+			}, 4000);
 		}
 	} else if (err) {
 
@@ -457,6 +475,12 @@ function addToPost(data) {
 			post.links.spotify = data.spLink;
 			addToFeed('spotify', data.spLink);
 		}
+
+		if (!post.links.youtube) {
+
+			post.links.youtube = data.ytLink;
+			addToFeed('youtube', data.ytLink);
+		}
 	}
 
 	if (data.type == 'youtube') {
@@ -479,6 +503,12 @@ function addToPost(data) {
 
 			post.links.spotify = data.spLink;
 			addToFeed('spotify', data.spLink);
+		}
+
+		if (!post.links.soundcloud) {
+
+			post.links.soundcloud = data.scLink;
+			addToFeed('soundcloud', data.scLink);
 		}
 	}
 
