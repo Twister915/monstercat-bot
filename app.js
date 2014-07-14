@@ -4,6 +4,7 @@ var rss = require('rss');
 var http = require('http');
 var request = require('request');
 var cheerio = require('cheerio');
+var unshorten = require('unshorten');
 var settings = require('./settings.js');
 
 /* Import Data */
@@ -32,7 +33,7 @@ function writeData(data) {
 var beatportURL = "http://www.beatport.com/label/monstercat/23412";	// These are the links we're going to crawl/request
 var soundcloudURL = "https://api.soundcloud.com/users/8553751/tracks.json?client_id=" + settings.scApiKey;
 var youtubeURL = "https://www.googleapis.com/youtube/v3/playlistItems?playlistId=UUJ6td3C9QlPO9O_J5dF4ZzA&key=" + settings.ytApiKey + "&part=snippet&maxResults=1";
-var date, bpData, bcData, scData, ytData, modhash, cookie, postSubmitted = false;
+var date = bpData = bcData = scData = ytData = modhash = cookie = postSubmitted = false;
 var post = {	// Build post data
 
 	title: "",
@@ -64,7 +65,6 @@ var feed = new rss({
 
 var xml = feed.xml('  ');
 
-/* Uncaught Error Handler */
 process.on('uncaughtException', function (err) {
 	console.error(err);
 });
@@ -76,7 +76,7 @@ function update() {
 
 	if (date.getUTCDay() == 1 || date.getUTCDay() == 3 || date.getUTCDay() == 5) {	// Is it a day in which we should be posting on?
 
-		if (date.getHours() == 0) {	// Is it time to reset?
+		if (date.getHours() == 0 && date.getMinutes() < 6) {	// Is it time to reset?
 
 			bpData = bcData = scData = ytData = modhash = cookie = postSubmitted = latest.currentThread = false;	// Clear variables
 			post = {	// Clear the post variables
@@ -99,7 +99,7 @@ function update() {
 
 			latest.postSubmitted = false;
 			latest.postedToday = false;
-			latest.latest.currentThread = "";
+			latest.currentThread = "";
 			writeData(latest);
 
 			console.log('ENGIN: Reset successful!');
@@ -111,10 +111,7 @@ function update() {
 
 function updateSources() {
 
-	if (!cookie || !modhash) {
-
-		redditLogin();
-	}
+	redditLogin();
 
 	if (!post.links.beatport) {
 
@@ -126,9 +123,15 @@ function updateSources() {
 		request(soundcloudURL, soundcloud);
 	}
 
-	if (!post.links.youtube || !post.links.bandcamp) {
+	if (!post.links.youtube) {
 
 		request(youtubeURL, youtube);
+	}
+
+	if (!post.links.bandcamp) {
+
+		request(youtubeURL, youtube);
+		request(soundcloudURL, soundcloud);
 	}
 
 	if (post.links.artworkSource != 'bandcamp' && post.links.bandcamp) {
@@ -246,31 +249,63 @@ function soundcloud(err, res, body) {
 
 		var track = JSON.parse(body)[0];
 
-		if (track.title.split("-")[1].slice(1)) {
+		if (track.title.split("-")[1] != undefined) {
 
-			scData = {
+			scData = {}
 
-				type: "soundcloud",
-				title: track.title.split("-")[1].slice(1),
-				date: track.release_year + "-" + track.release_month + "-" + track.release_day,
-				artist: track.title.split("-")[0].slice(0, -1),
-				link: track.permalink_url,
-				artwork: track.artwork_url,
-				bcLink: track.description.split("&#13;\n")[6].slice(21),
-				itLink: track.description.split("&#13;\n")[4].slice(19),
-				spLink: track.description.split("&#13;\n")[9].slice(19)
+			var urlregex = new RegExp(/[-a-zA-Z0-9@:%_\+.~#?&//=]{2,256}\.[a-z]{2,4}\b(\/[-a-zA-Z0-9@:%_\+.~#?&//=]*)?/gi);
+
+			for (var i = 4; i < 10; i++) {
+
+				if (track.description.split("&#13;\n")[i].match(urlregex) && track.description.split("&#13;\n")[i][0]) {
+
+					var url = track.description.split("&#13;\n")[i].split(": ")[1];
+					
+					unshorten(url, function(unshortened) {
+							
+						var domain = unshortened.match(/^https?\:\/\/([^\/?#]+)(?:[\/?#]|$)/i);
+						domain = domain && domain[1];
+
+						if (domain == "open.spotify.com") {
+
+							scData.spLink = unshortened;
+						} else if (domain == "music.monstercat.com") {
+
+							scData.bcLink = unshortened;
+						} else if (domain == "msclvr.co") {
+
+							unshorten(unshortened, function(ununshortened) {
+
+								scData.itLink = ununshortened;
+							});
+						} else if (domain == "youtube.com") {
+
+							scData.ytLink = unshortened;
+						}
+					});
+				}
 			}
 
-			if (scData.link != latest.soundcloud) {
+			scData.type = "soundcloud"
+			scData.title = track.title.split("-")[1].slice(1)
+			scData.date = track.release_year + "-" + track.release_month + "-" + track.release_day
+			scData.artist = track.title.split("-")[0].slice(0, -1)
+			scData.link = track.permalink_url
+			scData.artwork = track.artwork_url
 
-				addToPost(scData);
-				addToFeed(scData.type, scData.link);
+			setTimeout(function(){
 
-				latest.soundcloud = scData.link;
-				writeData(latest);
+				if (scData.link != latest.soundcloud) {
 
-				console.log("SNCLD: RECIEVED RESPONSE");
-			}
+					addToPost(scData);
+					addToFeed(scData.type, scData.link);
+
+					latest.soundcloud = scData.link;
+					writeData(latest);
+
+					console.log("SNCLD: RECIEVED RESPONSE");
+				}
+			}, 4000);
 		}
 	} else if (err) {
 
@@ -284,22 +319,50 @@ function soundcloud(err, res, body) {
 function youtube(err, res, body) {
 
 	if (!err && res.statusCode == 200) {
-
 		var track = JSON.parse(body).items[0].snippet;
 
-		if (track.title.split(" - ")[1]) {
+		if (track.title.split(" - ")[1] != undefined) {
 
-			ytData = {
+			ytData = {}
 
-				type: "youtube",
-				date: track.publishedAt.slice(0, -14),
-				link: "http://www.youtube.com/watch?v=" + track.resourceId.videoId,
-				bcLink: track.description.split("\n")[2].slice(21),
-				itLink: track.description.split("\n")[0].slice(19),
-				spLink: track.description.split("\n")[5].slice(19)
-			}
+			var urlregex = new RegExp(/[-a-zA-Z0-9@:%_\+.~#?&//=]{2,256}\.[a-z]{2,4}\b(\/[-a-zA-Z0-9@:%_\+.~#?&//=]*)?/gi);
 
-			if (track.title.split(" - ")[2]) {
+                        for (var i = 0; i < 6; i++) {
+
+                                if (track.description.split("\n")[i].match(urlregex) && track.description.split("\n")[i][0] == 'h') {
+
+                                        url = track.description.split("\n")[i];
+
+                                        unshorten(url, function(unshortened) {
+
+                                                var domain = unshortened.match(/^https?\:\/\/([^\/?#]+)(?:[\/?#]|$)/i);
+                                                domain = domain && domain[1];
+
+                                                if (domain == "open.spotify.com") {
+
+                                                        ytData.spLink = unshortened;
+                                                } else if (domain == "music.monstercat.com") {
+
+                                                        ytData.bcLink = unshortened;
+                                                } else if (domain == "msclvr.co") {
+
+                                                        unshorten(unshortened, function(ununshortened) {
+
+                                                                ytData.itLink = ununshortened;
+                                                        });
+                                                } else if (domain == "soundcloud.com") {
+
+							ytData.scLink = unshortened;
+						}
+                                        });
+                                }
+                        }
+
+			ytData.type = "youtube"
+			ytData.date = track.publishedAt.slice(0, -14)
+			ytData.link = "http://www.youtube.com/watch?v=" + track.resourceId.videoId
+			
+			if (track.title.split(" - ")[2] != undefined) {
 
 				ytData.title = track.title.split(" - ")[2].split(" [")[0]
 				ytData.artist = track.title.split(" - ")[1]
@@ -309,16 +372,19 @@ function youtube(err, res, body) {
 				ytData.artist = track.title.split(" - ")[0]
 			}
 
-			if (ytData.link != latest.youtube) {
+			setTimeout(function() {
 
-				addToPost(ytData);
-				addToFeed(ytData.type, ytData.link);
+				if (ytData.link != latest.youtube) {
 
-				latest.youtube = ytData.link;
-				writeData(latest);
+					addToPost(ytData);
+					addToFeed(ytData.type, ytData.link);
 
-				console.log("YOUTB: RECIEVED RESPONSE");
-			}
+					latest.youtube = ytData.link;
+					writeData(latest);
+
+					console.log("YOUTB: RECIEVED RESPONSE");
+				}
+			}, 4000);
 		}
 	} else if (err) {
 
@@ -335,7 +401,7 @@ function addToFeed(type, url) {
 
 	feed.item({
 
-		title: post.trackTitle + ' is now available on ' + type,
+		title: post.trackTitle + ' now on ' + type,
 		description: 
 			post.trackTitle + 
 			' by ' + 
@@ -409,6 +475,12 @@ function addToPost(data) {
 			post.links.spotify = data.spLink;
 			addToFeed('spotify', data.spLink);
 		}
+
+		if (!post.links.youtube) {
+
+			post.links.youtube = data.ytLink;
+			addToFeed('youtube', data.ytLink);
+		}
 	}
 
 	if (data.type == 'youtube') {
@@ -432,6 +504,12 @@ function addToPost(data) {
 			post.links.spotify = data.spLink;
 			addToFeed('spotify', data.spLink);
 		}
+
+		if (!post.links.soundcloud) {
+
+			post.links.soundcloud = data.scLink;
+			addToFeed('soundcloud', data.scLink);
+		}
 	}
 
 	if (post.trackTitle && post.artist) {
@@ -442,7 +520,7 @@ function addToPost(data) {
 	updatePost();
 }
 
-function redditLogin() {
+function redditLogin(callback) {
 
 	var options = {
 
@@ -459,6 +537,11 @@ function redditLogin() {
 
 		modhash = body.modhash;
 		cookie = 'reddit_session=' + encodeURIComponent(body.cookie);
+		
+		if (callback === true) {
+
+			updatePost();
+		}
 	});
 }
 
@@ -466,7 +549,7 @@ function updatePost() {
 
 	if (!modhash || !cookie) {
 
-		redditLogin();
+		redditLogin(true);
 	}
 
 	if (modhash && cookie && post.title) {
@@ -508,9 +591,9 @@ function updatePost() {
 		}
 		compiledPost += "___"
 		+ "\n\n"
-		+ "All discussion about this release goes below. Please post hype about the next release in the Next Release thread. I do not recieve karma for this post."
+		+ "All discussion about this release goes below. Please post hype about the next release in the Next Release thread."
 		+ "\n\n"
-		+ "[RSS for releases](http://huw.nu:9001) - [Email me](ift.tt/1oJ8TsH) - Notify me: [Android](ift.tt/1kIhBYU)";
+		+ "[RSS for releases](http://huw.nu:9001) - [Email updates](https://ifttt.com/recipes/181318-email-me-the-latest-monstercat-release-as-it-becomes-available-on-different-outlets) - Notify me: [Android](https://ifttt.com/recipes/181320-let-me-know-when-a-monstercat-release-becomes-available-on-a-new-outlet)/[iOS](https://ifttt.com/recipes/181457-let-me-know-when-a-monstercat-release-becomes-available-on-a-new-outlet)";
 
 		var options;
 		if (!latest.postSubmitted) {
@@ -598,6 +681,24 @@ function updatePost() {
 					};
 
 					request(options, stickyThread);
+
+					options = {
+
+						url: "http://www.reddit.com/r/Monstercat/api/flair?"
+							+ "api_type=json"
+							+ "&css_class=release"
+							+ "&link=" + latest.currentThread
+							+ "&text=Monstercat%20Release",
+						headers: {
+
+							"User-Agent": userAgent,
+							"X-Modhash": modhash,
+							"Cookie": cookie
+						},
+						method: "POST"
+					};
+
+					request(options, flairThread);
 				} else {
 
 					console.log('ENGIN: Edit completed successfully');
@@ -641,8 +742,22 @@ function stickyThread(err, res, body) {
 	}
 }
 
+function flairThread(err, res, body) {
+
+        if (!err && res.statusCode == 200) {
+
+                console.log('RDDIT: Flaired thread successfully');
+        } else if (err) {
+
+                throw err;
+        } else {
+
+                console.log('RDDIT: ' + res.statusCode + ' - ' + res.body);
+        }
+}
+
 update();
-setInterval(update, 300000);
+setInterval(update, 299000);
 
 /* Run RSS server */
 http.createServer(function (req, res) {
