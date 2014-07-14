@@ -1,3 +1,7 @@
 /node_modules/
 settings.js
+<<<<<<< HEAD
 sftp-config.json
+=======
+data.json
+>>>>>>> FETCH_HEAD
