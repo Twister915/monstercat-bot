@@ -30,7 +30,7 @@ function writeData(data) {
 }
 
 /* Declare globals */
-var beatportURL = "http://www.beatport.com/label/monstercat/23412";	// These are the links we're going to crawl/request
+var beatportURL = "http://www.beatport.com/label/monstercat/23412/releases";	// These are the links we're going to crawl/request
 var soundcloudURL = "https://api.soundcloud.com/users/8553751/tracks.json?client_id=" + settings.scApiKey;
 var youtubeURL = "https://www.googleapis.com/youtube/v3/playlistItems?playlistId=UUJ6td3C9QlPO9O_J5dF4ZzA&key=" + settings.ytApiKey + "&part=snippet&maxResults=1";
 var date = bpData = bcData = scData = ytData = modhash = cookie = postSubmitted = false;
@@ -150,44 +150,42 @@ function beatport(err, res, body) {
 
 			type: "beatport",
 			title: "",
-			date: "",
 			artist: "",
 			link: "",
 			artwork: ""
 		};
 
-		$('div.release-newest-xlarge').filter(function() {	// Skip straight to the latest release box
+		$('.filter-page-releases-list').filter(function() {  // Skip straight to the latest release box
 
-			var data = $(this);
+      var data = $(this).children().eq(1).children();
 
-			// Get track title
-			bpData.title = data.children().last().children().first().text();
+      var text = data.last().children().first().children();
 
-			// Get track release date
-			bpData.date = data.children().last().children().eq(3).text();
+      // Get track title
+      bpData.title = text.first().children().first().text();
 
-			// Get track artist(s)
-			var artistBuffer = [];
-			data.children().last().children().eq(1).children('a').each(function() {
-				artistBuffer.push($(this).text());	// In case there's multiple artists
-			});
-			if (artistBuffer.length == 1) {	// If there's one artist on this track (Artist)
+      // Get track artist(s)
+      var artistBuffer = [];
+      text.eq(1).children('a').each(function() {
+        artistBuffer.push($(this).text());  // In case there's multiple artists
+      });
+      if (artistBuffer.length == 1) { // If there's one artist on this track (Artist)
 
-				bpData.artist = artistBuffer[0];
-			} else {	// If there's more than two artists on this track (Artist, Artist & Artist)
+        bpData.artist = artistBuffer[0];
+      } else {  // If there's more than two artists on this track (Artist, Artist & Artist)
 
-				bpData.artist = artistBuffer[0];
-				for (var i = 1; i < artistBuffer.length - 1; i++) {
-					bpData.artist += ", " + artistBuffer[i];
-				}
-				bpData.artist += " & " + artistBuffer[artistBuffer.length - 1];
-			}
+        bpData.artist = artistBuffer[0];
+        for (var i = 1; i < artistBuffer.length - 1; i++) {
+          bpData.artist += ", " + artistBuffer[i];
+        }
+        bpData.artist += " & " + artistBuffer[artistBuffer.length - 1];
+      }
 
 			// Get track link
-			bpData.link = 'http://www.beatport.com' + data.children().last().children().first().attr('href');
+			bpData.link = 'https://pro.beatport.com' + text.first().children().first().attr('href');
 
 			// Get album artwork link
-			bpData.artwork = data.children().first().children().first().children().first().children().first().attr('data-full-image-url');
+			bpData.artwork = data.first().children().first().children().first().attr('data-src');
 			
 			if (bpData.link != latest.beatport) {
 
